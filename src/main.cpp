@@ -35,7 +35,8 @@ auto stepper4 = AccelStepper(motorInterfaceType, stepPinA, dirPinA);
 AccelStepper* steppers[] = {&stepper1, &stepper2, &stepper3, &stepper4};
 
 long stepsPerMl = 0;
-int calibrationStepCounter = 0;
+long calibrationStepCounter = 0;
+int calibrationStepperNumber = 0;
 
 // rotations to steps
 long rpsToSteps(const float rps)
@@ -68,12 +69,14 @@ bool f02setCalibrationMode(int stepperNumber, bool status)
 
     if(status)
     {
+        calibrationStepperNumber = stepperNumber;
         steppers[stepperNumber-1]->setSpeed(2500);
-        calibrationStepCounter = 0;
+        calibrationStepCounter = 1;
     } else
     {
         debug("Result: ");
         debugln(calibrationStepCounter);
+        calibrationStepCounter = 0;
     }
     return true;
 }
@@ -152,11 +155,15 @@ void pollSerial()
 
 void runSteppers()
 {
-    if (calibrationStepCounter > 0 && calibrationStepCounter < 5)
+    // calibration mode
+    if (calibrationStepCounter > 0)
     {
-        steppers[calibrationStepCounter - 1]->runSpeed();
-        calibrationStepCounter++;
+        if(steppers[calibrationStepperNumber - 1]->runSpeed())
+        {
+            calibrationStepCounter++;
+        };
     }
+    // dosing mode
     else
     {
         for (auto& stepper : steppers)
