@@ -1,7 +1,3 @@
-//
-// Created by Hendrik Putzek on 29.09.24.
-//
-
 #include <AccelStepper.h>
 
 #define debug_print
@@ -38,7 +34,11 @@ auto stepper3 = AccelStepper(motorInterfaceType, stepPinZ, dirPinZ);
 auto stepper4 = AccelStepper(motorInterfaceType, stepPinA, dirPinA);
 AccelStepper* steppers[] = {&stepper1, &stepper2, &stepper3, &stepper4};
 
-float rpsToSteps(const float rps)
+long stepsPerMl = 0;
+int calibrationStepCounter = 0;
+
+// rotations to steps
+long rpsToSteps(const float rps)
 {
     return (360.0f / degreesPerStep) * microSteps * rps;
 }
@@ -48,35 +48,139 @@ void initStepperWithDefaults(AccelStepper& stepper)
     stepper.setEnablePin(stepperEnablePin);
     stepper.setPinsInverted(false, false, true);
     stepper.setMaxSpeed(5000);
-    stepper.setAcceleration(stepper.maxSpeed() / 2);
+    stepper.setAcceleration(stepper.maxSpeed() / 8);
     stepper.enableOutputs();
+}
+
+bool f01doseAmount(const int stepperNumber, const float doseAmount)
+{
+    if (stepperNumber < 0 || stepperNumber > 4) return false;
+
+    steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + rpsToSteps(doseAmount));
+    return true;
+}
+
+// When enabled, stepper will immediately start rotating and counting the steps it made.
+// When disabling, stepper will stop and the measured steps will be saved.
+bool f02setCalibrationMode(int stepperNumber, bool status)
+{
+    if(stepperNumber < 1 || stepperNumber > 4) return false;
+
+    if(status)
+    {
+        steppers[stepperNumber-1]->setSpeed(2500);
+        calibrationStepCounter = 0;
+    } else
+    {
+        debug("Result: ");
+        debugln(calibrationStepCounter);
+    }
+    return true;
+}
+
+void parseSerialCommand(const String& command)
+{
+    int functionNumber = -1;
+    char commandCopy[command.length() + 1];
+    command.toCharArray(commandCopy, command.length() + 1);
+
+    char* token = strtok(commandCopy, " ");
+    if (token != nullptr)
+    {
+        functionNumber = atoi(token);
+    }
+
+    if (functionNumber == 1) // doseAmount function
+    {
+        int stepperNumber = -1;
+        float amount = 0.0f;
+
+        token = strtok(nullptr, " ");
+        if (token != nullptr) stepperNumber = atoi(token);
+
+        token = strtok(nullptr, " ");
+        if (token != nullptr) amount = atof(token);
+
+        if (f01doseAmount(stepperNumber, amount))
+        {
+            debug("doseAmount executed: ");
+            debugln(command);
+        }
+        else
+        {
+            debug("Invalid stepper number or dose amount: ");
+            debugln(stepperNumber);
+        }
+    }
+    else if (functionNumber == 2) // setCalibrationMode function
+    {
+        int stepperNumber = -1;
+        bool status = false;
+
+        token = strtok(nullptr, " ");
+        if (token != nullptr) stepperNumber = atoi(token);
+
+        token = strtok(nullptr, " ");
+        if (token != nullptr) status = atoi(token);
+
+        if (f02setCalibrationMode(stepperNumber, status))
+        {
+            debug("setCalibrationMode executed: ");
+            debugln(command);
+        }
+        else
+        {
+            debug("Invalid stepper number or status: ");
+            debugln(stepperNumber);
+        }
+    }
+    else
+    {
+        debug("Unknown function number: ");
+        debugln(functionNumber);
+    }
+}
+
+void pollSerial()
+{
+    if (Serial.available() > 0)
+    {
+        String input = Serial.readStringUntil('\n');
+        parseSerialCommand(input);
+    }
+}
+
+void runSteppers()
+{
+    if (calibrationStepCounter > 0 && calibrationStepCounter < 5)
+    {
+        steppers[calibrationStepCounter - 1]->runSpeed();
+        calibrationStepCounter++;
+    }
+    else
+    {
+        for (auto& stepper : steppers)
+        {
+            if (stepper->distanceToGo() > 0)
+            {
+                stepper->run();
+                break;
+            }
+        }
+    }
 }
 
 void setup()
 {
-    debug_begin(9600);
+    Serial.begin(9600);
     for (auto& stepper : steppers)
     {
         initStepperWithDefaults(*stepper);
     }
-    stepper2.moveTo(rpsToSteps(5));
-    stepper1.moveTo(rpsToSteps(6));
-    stepper3.moveTo(rpsToSteps(3));
-    stepper4.moveTo(rpsToSteps(1));
 }
 
 void loop()
 {
-    for (auto& stepper : steppers)
-    {
-        while (stepper->distanceToGo() != 0)
-        {
-            stepper->run();
-        }
-        if (stepper->distanceToGo() == 0)
-        {
-            stepper->moveTo(-stepper->currentPosition());
-            debugln("Revert position");
-        }
-    }
+    runSteppers();
+    pollSerial();
 }
