@@ -52,7 +52,6 @@ void initStepperWithDefaults(AccelStepper& stepper)
     stepper.setPinsInverted(false, false, true);
     stepper.setMaxSpeed(5000);
     stepper.setAcceleration(stepper.maxSpeed() / 8);
-    stepper.enableOutputs();
 }
 
 bool f01doseAmount(const int stepperNumber, const float doseAmount)
@@ -62,7 +61,7 @@ bool f01doseAmount(const int stepperNumber, const float doseAmount)
     const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
     debug("Dosing result in steps: ");
     debugln(stepsToGo);
-    stepper1.enableOutputs();
+    steppers[stepperNumber - 1]->enableOutputs();
     steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + stepsToGo);
     return true;
 }
@@ -83,18 +82,24 @@ bool f02setCalibrationMode(int stepperNumber, bool status, const int amountMl = 
     }
     else
     {
-        debug("Result: ");
-        debugln(calibrationStepCounter / calibrationMeasureAmountMl);
         debug("Steps: ");
         debugln(calibrationStepCounter);
-        debug("CalAmount: ");
+        debug("Liquid Amount: ");
         debugln(calibrationMeasureAmountMl);
+        debug("Steps/ml: ");
+        debugln(calibrationStepCounter / calibrationMeasureAmountMl);
         eepromManager.setStepsPerMl(calibrationStepCounter / calibrationMeasureAmountMl);
+        steppers[stepperNumber - 1]->disableOutputs();
+        steppers[stepperNumber - 1]->setCurrentPosition(0);
         calibrationStepCounter = 0;
         calibrationMeasureAmountMl = 0;
-        stepper1.disableOutputs();
     }
     return true;
+}
+
+void f03Ping()
+{
+    Serial.println("PumpsX4");
 }
 
 void parseSerialCommand(const String& command)
@@ -148,13 +153,18 @@ void parseSerialCommand(const String& command)
 
         if (f02setCalibrationMode(stepperNumber, status, amountMl))
         {
-            debug("Calibration successful.");
+            debug("Calibration mode ");
+            debugln(status == 1 ? "on" : "off");
         }
         else
         {
             debug("Invalid stepper number, status, or amountMl: ");
             debugln(command);
         }
+    }
+    else if (functionNumber == 3)
+    {
+        f03Ping();
     }
     else
     {
@@ -201,21 +211,17 @@ void runSteppers()
         {
             stepper1.disableOutputs();
         }
-        else
-        {
-            stepper1.enableOutputs();
-        }
     }
 }
 
 void setup()
 {
-
     Serial.begin(9600);
     for (auto& stepper : steppers)
     {
         initStepperWithDefaults(*stepper);
     }
+    f03Ping();
 }
 
 void loop()

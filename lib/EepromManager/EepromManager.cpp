@@ -34,6 +34,7 @@ void EepromManager::loadFromEeprom()
     {
         // Load the saved value from EEPROM
         EEPROM.get(EEPROM_ADDR_STEPS_PER_ML, stepsPerMl);
+        hasLoadedFromEeprom = true;
     }
 }
 
@@ -42,7 +43,6 @@ int EepromManager::getStepsPerMl()
 {
     if (!hasLoadedFromEeprom)
     {
-        hasLoadedFromEeprom = true;
         loadFromEeprom();
     }
     return stepsPerMl;
