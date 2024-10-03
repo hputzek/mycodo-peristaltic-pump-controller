@@ -1,4 +1,5 @@
 #include <AccelStepper.h>
+#include "EepromManager.h"
 
 #define debug_print
 
@@ -33,10 +34,11 @@ auto stepper2 = AccelStepper(motorInterfaceType, stepPinY, dirPinY);
 auto stepper3 = AccelStepper(motorInterfaceType, stepPinZ, dirPinZ);
 auto stepper4 = AccelStepper(motorInterfaceType, stepPinA, dirPinA);
 AccelStepper* steppers[] = {&stepper1, &stepper2, &stepper3, &stepper4};
+EepromManager eepromManager;
 
-long stepsPerMl = 0;
 long calibrationStepCounter = 0;
 int calibrationStepperNumber = 0;
+int calibrationMeasureAmountMl = 0;
 
 // rotations to steps
 long rpsToSteps(const float rps)
@@ -57,26 +59,40 @@ bool f01doseAmount(const int stepperNumber, const float doseAmount)
 {
     if (stepperNumber < 0 || stepperNumber > 4) return false;
 
-    steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + rpsToSteps(doseAmount));
+    const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
+    debug("Dosing result in steps: ");
+    debugln(stepsToGo);
+    stepper1.enableOutputs();
+    steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + stepsToGo);
     return true;
 }
 
 // When enabled, stepper will immediately start rotating and counting the steps it made.
 // When disabling, stepper will stop and the measured steps will be saved.
-bool f02setCalibrationMode(int stepperNumber, bool status)
+bool f02setCalibrationMode(int stepperNumber, bool status, const int amountMl = 0)
 {
-    if(stepperNumber < 1 || stepperNumber > 4) return false;
+    if (stepperNumber < 1 || stepperNumber > 4 || amountMl == 0) return false;
 
-    if(status)
+    if (status)
     {
+        calibrationMeasureAmountMl = amountMl;
         calibrationStepperNumber = stepperNumber;
-        steppers[stepperNumber-1]->setSpeed(2500);
+        steppers[stepperNumber - 1]->setSpeed(2500);
         calibrationStepCounter = 1;
-    } else
+        stepper1.enableOutputs();
+    }
+    else
     {
         debug("Result: ");
+        debugln(calibrationStepCounter / calibrationMeasureAmountMl);
+        debug("Steps: ");
         debugln(calibrationStepCounter);
+        debug("CalAmount: ");
+        debugln(calibrationMeasureAmountMl);
+        eepromManager.setStepsPerMl(calibrationStepCounter / calibrationMeasureAmountMl);
         calibrationStepCounter = 0;
+        calibrationMeasureAmountMl = 0;
+        stepper1.disableOutputs();
     }
     return true;
 }
@@ -106,12 +122,12 @@ void parseSerialCommand(const String& command)
 
         if (f01doseAmount(stepperNumber, amount))
         {
-            debug("doseAmount executed: ");
-            debugln(command);
+            debug("Dosing ml: ");
+            debugln(amount);
         }
         else
         {
-            debug("Invalid stepper number or dose amount: ");
+            debug("Invalid stepper number or amount: ");
             debugln(stepperNumber);
         }
     }
@@ -119,6 +135,7 @@ void parseSerialCommand(const String& command)
     {
         int stepperNumber = -1;
         bool status = false;
+        int amountMl = 300; // default value
 
         token = strtok(nullptr, " ");
         if (token != nullptr) stepperNumber = atoi(token);
@@ -126,15 +143,17 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) status = atoi(token);
 
-        if (f02setCalibrationMode(stepperNumber, status))
+        token = strtok(nullptr, " ");
+        if (token != nullptr) amountMl = atoi(token);
+
+        if (f02setCalibrationMode(stepperNumber, status, amountMl))
         {
-            debug("setCalibrationMode executed: ");
-            debugln(command);
+            debug("Calibration successful.");
         }
         else
         {
-            debug("Invalid stepper number or status: ");
-            debugln(stepperNumber);
+            debug("Invalid stepper number, status, or amountMl: ");
+            debugln(command);
         }
     }
     else
@@ -158,7 +177,7 @@ void runSteppers()
     // calibration mode
     if (calibrationStepCounter > 0)
     {
-        if(steppers[calibrationStepperNumber - 1]->runSpeed())
+        if (steppers[calibrationStepperNumber - 1]->runSpeed())
         {
             calibrationStepCounter++;
         };
@@ -166,19 +185,32 @@ void runSteppers()
     // dosing mode
     else
     {
+        bool mustDisableSteppers = true;
+
         for (auto& stepper : steppers)
         {
             if (stepper->distanceToGo() > 0)
             {
+                mustDisableSteppers = false;
                 stepper->run();
                 break;
             }
+        }
+
+        if (mustDisableSteppers)
+        {
+            stepper1.disableOutputs();
+        }
+        else
+        {
+            stepper1.enableOutputs();
         }
     }
 }
 
 void setup()
 {
+
     Serial.begin(9600);
     for (auto& stepper : steppers)
     {
