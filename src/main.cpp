@@ -50,7 +50,7 @@ void initStepperWithDefaults(AccelStepper& stepper)
 {
     stepper.setEnablePin(stepperEnablePin);
     stepper.setPinsInverted(false, false, true);
-    stepper.setMaxSpeed(5000);
+    stepper.setMaxSpeed(4000);
     stepper.setAcceleration(stepper.maxSpeed() / 8);
 }
 
@@ -100,6 +100,15 @@ bool f02setCalibrationMode(int stepperNumber, bool status, const int amountMl = 
 void f03Ping()
 {
     Serial.println("PumpsX4");
+}
+
+void f04ResetAll()
+{
+    for (auto& stepper : steppers)
+    {
+        stepper->setCurrentPosition(0);
+    }
+    Serial.println("Stopped all pumps.");
 }
 
 void parseSerialCommand(const String& command)
@@ -166,6 +175,10 @@ void parseSerialCommand(const String& command)
     {
         f03Ping();
     }
+    else if (functionNumber == 4)
+    {
+        f04ResetAll();
+    }
     else
     {
         debug("Unknown function number: ");
@@ -175,10 +188,28 @@ void parseSerialCommand(const String& command)
 
 void pollSerial()
 {
-    if (Serial.available() > 0)
+    static String inputString = ""; // A string to hold incoming data
+    static bool stringComplete = false; // Whether the string is complete
+
+    // Read the incoming data one character at a time
+    while (Serial.available() > 0)
     {
-        String input = Serial.readStringUntil('\n');
-        parseSerialCommand(input);
+        char inChar = (char)Serial.read();
+        inputString += inChar;
+
+        // Check if the incoming character is a newline character
+        if (inChar == '\n')
+        {
+            stringComplete = true;
+        }
+    }
+
+    // When the string is complete, call parseSerialCommand
+    if (stringComplete)
+    {
+        parseSerialCommand(inputString);
+        inputString = ""; // Clear the string
+        stringComplete = false; // Reset the flag
     }
 }
 
