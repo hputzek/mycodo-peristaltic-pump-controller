@@ -2,7 +2,7 @@
 ![asdf](/assets/header.jpg)
 
 ## 📑 Overview
-Peristaltic Pump controller firmware to control 4 pumps via serial commands.
+Simplistic peristaltic pump controller firmware to control 4 pumps via serial commands.
 
 ### 🔧 Hardware
 * Arduino Uno
@@ -16,19 +16,19 @@ Peristaltic Pump controller firmware to control 4 pumps via serial commands.
 
 1. Connect the controller to your computer or any device capable of sending serial commands.
 2. Open a serial terminal or use a program to send commands.
-3. Use the command format as described above to send instructions to the device.
+3. Use the command format as described below to send instructions to the device.
 4. The device will execute the command and provide feedback through the serial connection.
 
 ## 💬 Serial Commands
 
 ℹ️ All commands must be terminated with a newline (`\n`)
 
-| Command | Description                                                                       | Parameters                                                                                                                                                                                                    |
-|---------|-----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1       | Dispense a specified amount of liquid using a designated stepper motor.           | - `stepperNumber` (integer): ID of the stepper motor (1 to 4). <br> - `amount` (float): Amount of liquid in milliliters.                                                                                      |
-| 2       | Set a stepper motor to calibration mode.                                          | - `stepperNumber` (integer): ID of the stepper motor (1 to 4). <br> - `status` (boolean): `1` to start calibration mode, `0` to stop. <br> - `amountMl` (integer, optional): Amount of liquid in milliliters. |
-| 3       | Respond with a simple message to confirm the connection.                          | None                                                                                                                                                                                                          |
-| 4       | Immediately stop all motors.                                                      | None                                                                                                                                                                                                          |
+| Command | Description                                                             | Parameters                                                                                                                                                                                            |
+|---------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1       | Dispense a specified amount of liquid using a designated stepper motor. | - `stepperNumber` (integer): ID of the stepper motor (1 to 4). <br> - `amount` (float): Amount of liquid in milliliters.                                                                              |
+| 2       | Activate/deactivate calibration mode                                    | - `stepperNumber` (integer): ID of the stepper motor (1 to 4). <br> - `status` (boolean): `1` to start calibration mode, `0` to finish. <br> - `amountMl` (integer): Amount of liquid in milliliters. |
+| 3       | Respond with a simple message to confirm the connection.                | None                                                                                                                                                                                                  |
+| 4       | Immediately stop all motors.                                            | None                                                                                                                                                                                                  |
 
 ### 🧪 1. Dose Amount (`1 stepperNumber amount`)
 - **Description**: Dispense a specified amount of liquid using a designated stepper motor. 
@@ -43,10 +43,11 @@ Peristaltic Pump controller firmware to control 4 pumps via serial commands.
   This command will instruct stepper motor 2 to dispense 15.5 milliliters of liquid.
 
 ### ⚙️ 2. Set Calibration Mode (`2 stepperNumber status amountMl`)
-- **Description**: Set a stepper motor to calibration mode to measure and calibrate the steps per milliliter.
+- **Description**: Choose a stepper motor, enter calibration mode to measure and calibrate the steps per milliliter.
 - **How to use**:
+    * ⚠️ Calibration procedure: the result is used for all four steppers/pumps. You don't need to do it separately for each of the steppers/pumps
     * Get a measuring cup to dispense the liquid in during measurement
-    * Start calibration mode and set the amount of liquid you want to use for calibration (e.g. 500)
+    * Start calibration mode and set the amount of liquid you want to use for calibration (e.g. 500ml)
     * The pump will immediately start to dispense
     * Watch the measuring cup
     * Stop the calibration mode as soon as the selected amount was dispensed
@@ -59,7 +60,7 @@ Peristaltic Pump controller firmware to control 4 pumps via serial commands.
   ```plaintext
   2 3 1 250
   ```
-  This command will set stepper motor 3 to calibration mode to measure 250 milliliters of liquid. To stop calibration, send:
+  This command will set stepper motor 3 to calibration mode to measure 250 milliliters of liquid. To finish calibration, send:
   ```plaintext
   2 3 0
   ```

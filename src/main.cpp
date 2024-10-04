@@ -59,8 +59,14 @@ bool f01doseAmount(const int stepperNumber, const float doseAmount)
     if (stepperNumber < 0 || stepperNumber > 4) return false;
 
     const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
-    debug("Dosing result in steps: ");
-    debugln(stepsToGo);
+
+    debug("Pump ");
+    debug(stepperNumber);
+    debug(": dosing ");
+    debug(doseAmount);
+    debug("ml / ");
+    debug(stepsToGo);
+    debugln(" steps");
     steppers[stepperNumber - 1]->enableOutputs();
     steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + stepsToGo);
     return true;
@@ -82,6 +88,7 @@ bool f02setCalibrationMode(int stepperNumber, bool status, const int amountMl = 
     }
     else
     {
+        debugln("------- CALIBRATION RESULT ------");
         debug("Steps: ");
         debugln(calibrationStepCounter);
         debug("Liquid Amount: ");
@@ -136,8 +143,7 @@ void parseSerialCommand(const String& command)
 
         if (f01doseAmount(stepperNumber, amount))
         {
-            debug("Dosing ml: ");
-            debugln(amount);
+            Serial.println("---");
         }
         else
         {
@@ -192,7 +198,7 @@ void pollSerial()
     static bool stringComplete = false; // Whether the string is complete
 
     // Read the incoming data one character at a time
-    while (Serial.available() > 0)
+    while (Serial.available() > 0 && !stringComplete)
     {
         char inChar = (char)Serial.read();
         inputString += inChar;
@@ -234,6 +240,8 @@ void runSteppers()
             {
                 mustDisableSteppers = false;
                 stepper->run();
+                // Arduino uno is too slow to handle more than 1 pump running at once.
+                // this is why the break is here: it lets only one pump run at a time
                 break;
             }
         }
