@@ -1,5 +1,5 @@
 # 🚀 Peristaltic Pump Controller
-![asdf](/assets/header.jpg)
+![Header image](/assets/header.jpg)
 
 ## 📑 Overview
 Simplistic peristaltic pump controller firmware to control 4 pumps via serial commands.
