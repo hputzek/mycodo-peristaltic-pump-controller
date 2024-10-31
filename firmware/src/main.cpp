@@ -106,7 +106,7 @@ bool f02setCalibrationMode(int stepperNumber, bool status, const int amountMl = 
 
 void f03Ping()
 {
-    Serial.println("PumpsX4");
+    Serial.println(R"({"device":"PumpsX4", "version":"1.0"})");
 }
 
 void f04ResetAll()
