@@ -72,7 +72,7 @@ Simplistic peristaltic pump controller firmware to control 4 pumps via serial co
   ```plaintext
   3
   ```
-  This command will trigger a response message "PumpsX4".
+  This command will trigger a response message "{"device":"PumpsX4", "version":"1.0"}".
 
 ### 🆑 4. Reset All (`4`)
 - **Description**: Immediately stop all motors.
