@@ -1,5 +1,6 @@
 #include <AccelStepper.h>
 #include "EepromManager.h"
+#include "arduino-timer.h"
 
 #define debug_print
 
@@ -19,12 +20,17 @@
 #define dirPinX 5
 #define dirPinY 6
 #define dirPinZ 7
-#define dirPinA 13
+#define dirPinA limitYAxis
 
 #define stepPinX 2
 #define stepPinY 3
 #define stepPinZ 4
 #define stepPinA 12
+
+#define limitZAxis 11
+#define stirringDisablePin limitZAxis // Connect to GND with a jumper to disable Stirring output mode
+#define limitYAxis 10
+#define stirringOutputPin limitYAxis // Output pin for stirrer on/off
 
 #define degreesPerStep 1.8f
 #define microSteps 8
@@ -35,6 +41,9 @@ auto stepper3 = AccelStepper(motorInterfaceType, stepPinZ, dirPinZ);
 auto stepper4 = AccelStepper(motorInterfaceType, stepPinA, dirPinA);
 AccelStepper* steppers[] = {&stepper1, &stepper2, &stepper3, &stepper4};
 EepromManager eepromManager;
+auto timer = timer_create_default();
+bool stirringModeEnabled = false;
+bool pumpStartDelayActive = false;
 
 long calibrationStepCounter = 0;
 int calibrationStepperNumber = 0;
@@ -54,9 +63,30 @@ void initStepperWithDefaults(AccelStepper& stepper)
     stepper.setAcceleration(stepper.maxSpeed() / 8);
 }
 
+// when stirring is enabled, delay the activation of the pumps and start stirring
+void handlePumpStartDelay()
+{
+    if (stirringModeEnabled)
+    {
+        digitalWrite(stirringOutputPin, HIGH);
+        if (!pumpStartDelayActive)
+        {
+            pumpStartDelayActive = true;
+            timer.cancel();
+            timer.in(5000, [](void*) -> bool
+            {
+                pumpStartDelayActive = false;
+                return false;
+            });
+        }
+    }
+}
+
 bool f01doseAmount(const int stepperNumber, const float doseAmount)
 {
     if (stepperNumber < 0 || stepperNumber > 4) return false;
+
+    handlePumpStartDelay();
 
     const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
 
@@ -249,6 +279,14 @@ void runSteppers()
         if (mustDisableSteppers)
         {
             stepper1.disableOutputs();
+            if (stirringModeEnabled)
+            {
+                timer.in(2000, [](void*) -> bool
+                {
+                    digitalWrite(stirringOutputPin, LOW);
+                    return false;
+                });
+            }
         }
     }
 }
@@ -261,10 +299,18 @@ void setup()
         initStepperWithDefaults(*stepper);
     }
     f03Ping();
+
+    pinMode(stirringDisablePin, INPUT_PULLUP);
+    pinMode(stirringOutputPin, OUTPUT);
+    stirringModeEnabled = digitalRead(stirringDisablePin) == HIGH;
 }
 
 void loop()
 {
-    runSteppers();
+    timer.tick<void>();
+    if (!pumpStartDelayActive || !stirringModeEnabled)
+    {
+        runSteppers();
+    }
     pollSerial();
 }
