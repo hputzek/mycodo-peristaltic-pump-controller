@@ -1,7 +1,16 @@
 # Setup pumps as an output in mycodo
-![](../assets/mycodo-gui-1.png)
+
+In Mycodo settings -> Custom Outputs: Import [the custom output pumps_pumpsx4.py](pump_pumpsx4.py)
+
+![](../assets/mycodo-import-output-module.png)
+
+After import the output can be used. Its name is `PumpsX4 Output [UART] `
+
+
 
 ## Initial setup
+![](../assets/mycodo-gui-1.png)
+
 Set `Name` and `UART Device` and click `SAVE`
 
 ### Calibration
