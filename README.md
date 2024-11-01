@@ -1,13 +1,14 @@
-# 🚀 Peristaltic Pump Controller
+# 🚀 Peristaltic Pump Controller (Mycodo compatible)
 ![Header image](/assets/header.jpg)
 
 ## 📑 Overview
 Simplistic peristaltic pump controller firmware to control 4 pumps via serial commands.
 
+In addition, a stirring output is available, which automatically switches on/off to pre-stir the liquids before the pumps activate.
+
+For use with [Mycodo](https://kizniche.github.io/Mycodo/) a custom output is available in `mycodo` folder.
 ### 🔧 Hardware
-* Arduino Uno
-* [CNC shield v3](https://www.az-delivery.de/en/products/az-delivery-cnc-shield-v3) + drivers
-* Peristaltic Pumps with stepper motor ([e.g. from AliExpress](https://de.aliexpress.com/item/1005004240331933.html))
+[For how to prepare the hardware refer to the hardware docs](./docs/setup-hardware.md)
 
 ### 🛠️ Compile Firmware
 [This is a Platformio project.](https://platformio.org/)
