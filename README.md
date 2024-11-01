@@ -10,10 +10,10 @@ For use with [Mycodo](https://kizniche.github.io/Mycodo/) a custom output is ava
 ### 🔧 Hardware
 [For how to prepare the hardware refer to the hardware docs](./docs/setup-hardware.md)
 
-### 🛠️ Compile Firmware
-[This is a Platformio project.](https://platformio.org/)
-
 ## 📝 How to Use
+For use with [Mycodo](https://kizniche.github.io/Mycodo/) refer to [this README.md](./mycodo/README.md)
+
+For direct control via serial commands:
 
 1. Connect the controller to your computer or any device capable of sending serial commands.
 2. Open a serial terminal or use a program to send commands.
