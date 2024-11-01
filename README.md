@@ -11,9 +11,11 @@ For use with [Mycodo](https://kizniche.github.io/Mycodo/) a custom output is ava
 [For how to prepare the hardware refer to the hardware docs](./docs/setup-hardware.md)
 
 ## 📝 How to Use
-For use with [Mycodo](https://kizniche.github.io/Mycodo/) refer to [this README.md](./mycodo/README.md)
+For use with [Mycodo](https://kizniche.github.io/Mycodo/) refer to 
 
-For direct control via serial commands:
+### [setup in mycodo](./mycodo/README.md)
+
+### For direct control via serial commands:
 
 1. Connect the controller to your computer or any device capable of sending serial commands.
 2. Open a serial terminal or use a program to send commands.
