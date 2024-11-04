@@ -85,18 +85,10 @@ void handlePumpStartDelay()
 bool f01doseAmount(const int stepperNumber, const float doseAmount)
 {
     if (stepperNumber < 0 || stepperNumber > 4) return false;
-
-    handlePumpStartDelay();
-
+    
     const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
-
-    debug("Pump ");
-    debug(stepperNumber);
-    debug(": dosing ");
-    debug(doseAmount);
-    debug("ml / ");
-    debug(stepsToGo);
-    debugln(" steps");
+    debugln("Pump " + String(stepperNumber) + ": dosing " + String(doseAmount) + "ml / " + String(stepsToGo) + " steps");
+    handlePumpStartDelay();
     steppers[stepperNumber - 1]->enableOutputs();
     steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + stepsToGo);
     return true;
@@ -171,11 +163,7 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) amount = atof(token);
 
-        if (f01doseAmount(stepperNumber, amount))
-        {
-            Serial.println("---");
-        }
-        else
+        if (!f01doseAmount(stepperNumber, amount))
         {
             debug("Invalid stepper number or amount: ");
             debugln(stepperNumber);

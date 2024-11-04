@@ -22,5 +22,8 @@ Additional hardware e.g. a magnetic stirrer is needed. The board just provides t
 ### configure CNC shield with jumpers
 ![](/assets/cnc-shield-v3-setup.png)
 
+### set reference voltage for stepper drivers
+[See here](https://all3dp.com/2/vref-calculator-tmc2209-tmc2208-a4988/)
+
 ### Pinout arduino ↔️ CNC shield
 ![](/assets/cnc-shield-v3-arduino-pinout.png)
