@@ -14,83 +14,175 @@
    #define debugln(x)
 #endif
 
-#define motorInterfaceType 1
-#define stepperEnablePin 8
+// stepper related
+#define MOTOR_INTERFACE_TYPE 1
+#define STEPPER_ENABLE_PIN 8
 
-#define dirPinX 5
-#define dirPinY 6
-#define dirPinZ 7
-#define dirPinA limitYAxis
+#define DIR_PIN_X 5
+#define DIR_PIN_Y 6
+#define DIR_PIN_Z 7
+#define DIR_PIN_A 13
 
-#define stepPinX 2
-#define stepPinY 3
-#define stepPinZ 4
-#define stepPinA 12
+#define STEP_PIN_X 2
+#define STEP_PIN_Y 3
+#define STEP_PIN_Z 4
+#define STEP_PIN_A 12
 
-#define limitZAxis 11
-#define stirringDisablePin limitZAxis // Connect to GND with a jumper to disable Stirring output mode
-#define limitYAxis 10
-#define stirringOutputPin limitYAxis // Output pin for stirrer on/off
+#define DEGREES_PER_STEP 1.8f
+#define MICRO_STEPS 8
 
-#define degreesPerStep 1.8f
-#define microSteps 8
+// stirrer pins
+#define LIMIT_Z_AXIS 11
+#define STIRRING_DISABLE_PIN LIMIT_Z_AXIS // Connect to GND with a jumper to disable Stirring output mode
+#define LIMIT_Y_AXIS 10
+#define STIRRING_OUTPUT_PIN LIMIT_Y_AXIS // Output pin for stirrer on/off
 
-auto stepper1 = AccelStepper(motorInterfaceType, stepPinX, dirPinX);
-auto stepper2 = AccelStepper(motorInterfaceType, stepPinY, dirPinY);
-auto stepper3 = AccelStepper(motorInterfaceType, stepPinZ, dirPinZ);
-auto stepper4 = AccelStepper(motorInterfaceType, stepPinA, dirPinA);
-AccelStepper* steppers[] = {&stepper1, &stepper2, &stepper3, &stepper4};
+// motor pins (on&off)
+#define ABORT_PIN 14
+#define HOLD_PIN 15
+#define MOTOR1_PIN ABORT_PIN
+#define MOTOR2_PIN HOLD_PIN
+
 EepromManager eepromManager;
-auto timer = timer_create_default();
-bool stirringModeEnabled = false;
-bool pumpStartDelayActive = false;
 
-long calibrationStepCounter = 0;
+// steppers
+auto stepper1 = AccelStepper(MOTOR_INTERFACE_TYPE, STEP_PIN_X, DIR_PIN_X);
+auto stepper2 = AccelStepper(MOTOR_INTERFACE_TYPE, STEP_PIN_Y, DIR_PIN_Y);
+auto stepper3 = AccelStepper(MOTOR_INTERFACE_TYPE, STEP_PIN_Z, DIR_PIN_Z);
+auto stepper4 = AccelStepper(MOTOR_INTERFACE_TYPE, STEP_PIN_A, DIR_PIN_A);
+AccelStepper* steppers[] = {&stepper1, &stepper2, &stepper3, &stepper4};
+
+unsigned long calibrationStepCounter = 0;
 int calibrationStepperNumber = 0;
 int calibrationMeasureAmountMl = 0;
+
+unsigned long remainingTicksMotor1 = 0;
+unsigned long remainingTicksMotor2 = 0;
+
+auto stirTimer = timer_create_default();
+auto motorTimer = timer_create_default();
+bool stirringModeEnabled = false;
+bool stirrerActive = false;
+bool pumpStartDelayActive = false;
+
+
+bool motor1State = LOW;
+bool motor2State = LOW;
+
+void setMotorState(int motorPin, bool& motorState, unsigned long& remainingTicks)
+{
+    if (remainingTicks > 0)
+    {
+        if (motorState != HIGH)
+        {
+            debugln("Motor " + String(motorPin) + " on");
+            digitalWrite(motorPin, HIGH);
+            motorState = HIGH;
+        }
+        remainingTicks--;
+    }
+    else
+    {
+        if (motorState != LOW)
+        {
+            debugln("Motor " + String(motorPin) + " off");
+            digitalWrite(motorPin, LOW);
+            motorState = LOW;
+        }
+    }
+}
+
+bool handleMotors(void*)
+{
+    setMotorState(MOTOR1_PIN, motor1State, remainingTicksMotor1);
+    setMotorState(MOTOR2_PIN, motor2State, remainingTicksMotor2);
+    return true;
+}
+
 
 // rotations to steps
 long rpsToSteps(const float rps)
 {
-    return (360.0f / degreesPerStep) * microSteps * rps;
+    return (360.0f / DEGREES_PER_STEP) * MICRO_STEPS * rps;
+}
+
+bool steppersActive = false;
+
+void disableSteppers()
+{
+    if (steppersActive)
+    {
+        debugln("Disable steppers");
+        steppersActive = false;
+        stepper1.disableOutputs();
+    }
 }
 
 void initStepperWithDefaults(AccelStepper& stepper)
 {
-    stepper.setEnablePin(stepperEnablePin);
+    stepper.setEnablePin(STEPPER_ENABLE_PIN);
     stepper.setPinsInverted(false, false, true);
     stepper.setMaxSpeed(4000);
     stepper.setAcceleration(stepper.maxSpeed() / 8);
 }
 
 // when stirring is enabled, delay the activation of the pumps and start stirring
-void handlePumpStartDelay()
+void setPumpStartDelay()
 {
     if (stirringModeEnabled)
     {
-        digitalWrite(stirringOutputPin, HIGH);
-        if (!pumpStartDelayActive)
+        digitalWrite(STIRRING_OUTPUT_PIN, HIGH);
+        debugln("Activate stirrer");
+
+        pumpStartDelayActive = true;
+        stirrerActive = true;
+        stirTimer.cancel();
+        stirTimer.in(5000, [](void*) -> bool
         {
-            pumpStartDelayActive = true;
-            timer.cancel();
-            timer.in(5000, [](void*) -> bool
-            {
-                pumpStartDelayActive = false;
-                return false;
-            });
-        }
+            pumpStartDelayActive = false;
+            return false;
+        });
     }
 }
 
-bool f01doseAmount(const int stepperNumber, const float doseAmount)
+
+bool pumpStopDelayActive = false;
+void handlePumpStopDelay()
+{
+    bool steppersActive = false;
+    for (auto& stepper : steppers)
+    {
+        if (stepper->distanceToGo() > 0)
+        {
+            steppersActive = true;
+            break;
+        }
+    }
+    if (stirringModeEnabled && remainingTicksMotor1 == 0 && remainingTicksMotor2 == 0 && stirrerActive && !pumpStopDelayActive && !pumpStartDelayActive && !steppersActive)
+    {
+        pumpStopDelayActive = true;
+        stirTimer.in(2000, [](void*) -> bool
+        {
+            pumpStopDelayActive = false;
+            stirrerActive = false;
+            digitalWrite(STIRRING_OUTPUT_PIN, LOW);
+            debugln("Deactivate stirrer");
+            return false;
+        });
+    }
+}
+
+bool f01doseAmountSteppers(const int stepperNumber, const float doseAmount)
 {
     if (stepperNumber < 0 || stepperNumber > 4) return false;
-    
+
     const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
-    debugln("Pump " + String(stepperNumber) + ": dosing " + String(doseAmount) + "ml / " + String(stepsToGo) + " steps");
-    handlePumpStartDelay();
+    debugln(
+        "Pump " + String(stepperNumber) + ": dosing " + String(doseAmount) + "ml / " + String(stepsToGo) + " steps");
+    setPumpStartDelay();
     steppers[stepperNumber - 1]->enableOutputs();
     steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + stepsToGo);
+    steppersActive = true;
     return true;
 }
 
@@ -126,9 +218,24 @@ bool f02setCalibrationMode(int stepperNumber, bool status, const int amountMl = 
     return true;
 }
 
+Timer<>::Task stirringTask = nullptr;
+
 void f03Ping()
 {
     Serial.println(R"({"device":"PumpsX4", "version":"1.0"})");
+    digitalWrite(STIRRING_OUTPUT_PIN, HIGH);
+
+    if (stirringTask != nullptr)
+    {
+        stirTimer.cancel(stirringTask);
+    }
+
+    stirringTask = stirTimer.in(5000, [](void*) -> bool
+    {
+        digitalWrite(STIRRING_OUTPUT_PIN, LOW);
+        stirringTask = nullptr;
+        return true;
+    });
 }
 
 void f04ResetAll()
@@ -139,6 +246,34 @@ void f04ResetAll()
     }
     Serial.println("Stopped all pumps.");
 }
+
+bool f05doseAmountMotors(const int motorNumber, const float doseAmount)
+{
+    if (motorNumber < 1 || motorNumber > 2) return false;
+    if (doseAmount > 0)
+    {
+        debugln("Motor " + String(motorNumber) + ": dosing " + String(doseAmount));
+        setPumpStartDelay();
+        if (motorNumber == 1)
+        {
+            if (remainingTicksMotor1 != 0)
+            {
+                debugln(" + remaining " + String(remainingTicksMotor1));
+            }
+            remainingTicksMotor1 += doseAmount;
+        }
+        else
+        {
+            if (remainingTicksMotor2 != 0)
+            {
+                debugln(" + remaining " + String(remainingTicksMotor2));
+            }
+            remainingTicksMotor2 += doseAmount;
+        }
+    }
+    return true;
+}
+
 
 void parseSerialCommand(const String& command)
 {
@@ -163,7 +298,7 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) amount = atof(token);
 
-        if (!f01doseAmount(stepperNumber, amount))
+        if (!f01doseAmountSteppers(stepperNumber, amount))
         {
             debug("Invalid stepper number or amount: ");
             debugln(stepperNumber);
@@ -202,6 +337,10 @@ void parseSerialCommand(const String& command)
     else if (functionNumber == 4)
     {
         f04ResetAll();
+    }
+    else if (functionNumber == 5)
+    {
+        f05doseAmountMotors(1, 2000);
     }
     else
     {
@@ -266,15 +405,7 @@ void runSteppers()
 
         if (mustDisableSteppers)
         {
-            stepper1.disableOutputs();
-            if (stirringModeEnabled)
-            {
-                timer.in(2000, [](void*) -> bool
-                {
-                    digitalWrite(stirringOutputPin, LOW);
-                    return false;
-                });
-            }
+            disableSteppers();
         }
     }
 }
@@ -286,18 +417,22 @@ void setup()
     {
         initStepperWithDefaults(*stepper);
     }
+    pinMode(STIRRING_DISABLE_PIN, INPUT_PULLUP);
+    pinMode(STIRRING_OUTPUT_PIN, OUTPUT);
+    pinMode(MOTOR1_PIN, OUTPUT);
+    pinMode(MOTOR2_PIN, OUTPUT);
+    stirringModeEnabled = digitalRead(STIRRING_DISABLE_PIN) == HIGH;
+    motorTimer.every(1, handleMotors);
     f03Ping();
-
-    pinMode(stirringDisablePin, INPUT_PULLUP);
-    pinMode(stirringOutputPin, OUTPUT);
-    stirringModeEnabled = digitalRead(stirringDisablePin) == HIGH;
 }
 
 void loop()
 {
-    timer.tick<void>();
+    stirTimer.tick<void>();
+    handlePumpStopDelay();
     if (!pumpStartDelayActive || !stirringModeEnabled)
     {
+        motorTimer.tick();
         runSteppers();
     }
     pollSerial();
