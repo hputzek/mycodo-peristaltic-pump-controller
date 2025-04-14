@@ -56,6 +56,7 @@ void EepromManager::setStepsPerMl(int steps)
 {
     stepsPerMl = steps;
     saveToEeprom();
+    hasLoadedFromEeprom = false;
 }
 
 // Get the value of timePerMl
@@ -73,4 +74,5 @@ void EepromManager::setTimePerMl(int time)
 {
     timePerMl = time;
     saveToEeprom();
+    hasLoadedFromEeprom = false;
 }
