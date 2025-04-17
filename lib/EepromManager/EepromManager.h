@@ -5,7 +5,9 @@ class EepromManager
 {
 public:
     EepromManager();
-    void saveToEeprom() const;
+    ~EepromManager();
+    
+    void saveToEeprom();
     void loadFromEeprom();
 
     int getStepsPerMl();
@@ -22,6 +24,7 @@ private:
     int stepsPerMl;
     int timePerMl;
     bool hasLoadedFromEeprom;
+    bool isDirty;  // Tracks if data has changed and needs to be saved
 };
 
 #endif
