@@ -185,9 +185,14 @@ void handlePumpStopDelay()
     }
 }
 
-bool f01doseAmountSteppers(const int stepperNumber, const float doseAmount)
+void f01doseAmountSteppers(const int stepperNumber, const float doseAmount)
 {
-    if (stepperNumber < 0 || stepperNumber > 4) return false;
+    if (stepperNumber < 0 || stepperNumber > 4)
+    {
+        debug("Invalid stepper number: ");
+        debugln(stepperNumber);
+        return;
+    }
 
     const long stepsToGo = static_cast<long>(doseAmount * eepromManager.getStepsPerMl());
     debugln(
@@ -196,17 +201,21 @@ bool f01doseAmountSteppers(const int stepperNumber, const float doseAmount)
     steppers[stepperNumber - 1]->enableOutputs();
     steppers[stepperNumber - 1]->move(steppers[stepperNumber - 1]->distanceToGo() + stepsToGo);
     steppersActive = true;
-    return true;
 }
 
 // When enabled, stepper will immediately start rotating and counting the steps it made.
 // When disabling, stepper will stop and the measured steps will be saved.
-bool f02setCalibrationModeSteppers(int stepperNumber, bool status, const int amountMl = 0)
+void f02setCalibrationModeSteppers(int stepperNumber, bool status, const int amountMl = 0)
 {
-    if (stepperNumber < 1 || stepperNumber > 4 || amountMl == 0) return false;
+    if (stepperNumber < 1 || stepperNumber > 4 || amountMl == 0)
+    {
+        debugln("Invalid stepper number or amountMl: stepperNumber=" + String(stepperNumber) + ", amountMl=" + String(amountMl));
+        return;
+    }
 
     if (status)
     {
+        debugln("Calibration mode on");
         calibrationMeasureAmountMl = amountMl;
         calibrationStepperNumber = stepperNumber;
         steppers[stepperNumber - 1]->setSpeed(2500);
@@ -228,7 +237,6 @@ bool f02setCalibrationModeSteppers(int stepperNumber, bool status, const int amo
         calibrationStepperStepCounter = 0;
         calibrationMeasureAmountMl = 0;
     }
-    return true;
 }
 
 Timer<>::Task stirringTask = nullptr;
@@ -260,9 +268,14 @@ void f04ResetAll()
     Serial.println("Stopped all pumps.");
 }
 
-bool f05doseAmountMotors(const int motorNumber, const float doseAmount)
+void f05doseAmountMotors(const int motorNumber, const float doseAmount)
 {
-    if (motorNumber < 1 || motorNumber > 2) return false;
+    if (motorNumber < 1 || motorNumber > 2)
+    {
+        debug("Invalid motor number: ");
+        debugln(motorNumber);
+        return;
+    }
     if (doseAmount > 0)
     {
         const long ticksToGo = static_cast<long>(doseAmount * eepromManager.getTimePerMl());
@@ -285,15 +298,14 @@ bool f05doseAmountMotors(const int motorNumber, const float doseAmount)
             remainingTicksMotor2 += ticksToGo;
         }
     }
-    return true;
 }
 
-bool f06setCalibrationModeMotors(int motorNumber, bool status, const int amountMl = 0)
+void f06setCalibrationModeMotors(int motorNumber, bool status, const int amountMl = 0)
 {
     if (motorNumber < 1 || motorNumber > 2 || amountMl == 0)
     {
         "Invalid motor number or amountMl: motorNumber=" + String(motorNumber) + ", amountMl=" + String(amountMl);
-        return false;
+        return;
     };
     if (status)
     {
@@ -324,7 +336,6 @@ bool f06setCalibrationModeMotors(int motorNumber, bool status, const int amountM
         calibrationMotorStepCounter = 0;
         calibrationModeMotor = false;
     }
-    return true;
 }
 
 
@@ -351,11 +362,7 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) amount = atof(token);
 
-        if (!f01doseAmountSteppers(stepperNumber, amount))
-        {
-            debug("Invalid stepper number or amount: ");
-            debugln(stepperNumber);
-        }
+        f01doseAmountSteppers(stepperNumber, amount);
     }
     else if (functionNumber == 2) // setCalibrationMode function
     {
@@ -372,16 +379,7 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) amountMl = atoi(token);
 
-        if (f02setCalibrationModeSteppers(stepperNumber, status, amountMl))
-        {
-            debug("Calibration mode ");
-            debugln(status == 1 ? "on" : "off");
-        }
-        else
-        {
-            debug("Invalid stepper number, status, or amountMl: ");
-            debugln(command);
-        }
+        f02setCalibrationModeSteppers(stepperNumber, status, amountMl);
     }
     else if (functionNumber == 3)
     {
@@ -402,11 +400,7 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) amount = atof(token);
 
-        if (!f05doseAmountMotors(motorNumber, amount))
-        {
-            debug("Invalid motor number or amount: ");
-            debugln(motorNumber);
-        }
+        f05doseAmountMotors(motorNumber, amount);
     }
     else if (functionNumber == 6) // setCalibrationMode function
     {
@@ -423,16 +417,7 @@ void parseSerialCommand(const String& command)
         token = strtok(nullptr, " ");
         if (token != nullptr) amountMl = atoi(token);
 
-        if (f06setCalibrationModeMotors(motorNumber, status, amountMl))
-        {
-            debug("Calibration mode ");
-            debugln(status == 1 ? "on" : "off");
-        }
-        else
-        {
-            debug("Invalid motor number, status, or amountMl: ");
-            debugln(command);
-        }
+        f06setCalibrationModeMotors(motorNumber, status, amountMl);
     }
     else
     {
