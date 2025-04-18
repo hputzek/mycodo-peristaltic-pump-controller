@@ -14,6 +14,10 @@
    #define debugln(x)
 #endif
 
+// Device information
+#define DEVICE_NAME "PumpsX4"
+#define VERSION "1.0"
+
 // stepper related
 #define MOTOR_INTERFACE_TYPE 1
 #define STEPPER_ENABLE_PIN 8
@@ -59,6 +63,8 @@ int calibrationMeasureAmountMl = 0;
 unsigned long remainingTicksMotor1 = 0;
 unsigned long remainingTicksMotor2 = 0;
 unsigned long calibrationMotorStepCounter = 0;
+unsigned long calibrationMotorNumber = 0;
+unsigned long calibrationMotorAmountMl = 0;
 
 auto stirTimer = timer_create_default();
 auto motorTimer = timer_create_default();
@@ -204,8 +210,7 @@ void f01doseAmountSteppers(const int stepperNumber, const float doseAmount)
 }
 
 // When enabled, stepper will immediately start rotating and counting the steps it made.
-// When disabling, stepper will stop and the measured steps will be saved.
-void f02setCalibrationModeSteppers(int stepperNumber, bool status, const int amountMl = 0)
+void f02setCalibrationModeSteppers(int stepperNumber, const int amountMl = 0)
 {
     if (stepperNumber < 1 || stepperNumber > 4 || amountMl == 0)
     {
@@ -213,37 +218,44 @@ void f02setCalibrationModeSteppers(int stepperNumber, bool status, const int amo
         return;
     }
 
-    if (status)
+    debugln("Calibration mode on");
+    debugln("Selected stepper: " + String(stepperNumber) + ", amount: " + String(amountMl) + "ml");
+    debugln("To finish send '8'");
+    calibrationMeasureAmountMl = amountMl;
+    calibrationStepperNumber = stepperNumber;
+    steppers[stepperNumber - 1]->setSpeed(2500);
+    calibrationStepperStepCounter = 1;
+    stepper1.enableOutputs();
+}
+
+// When disabling calibration mode, stepper will stop and the measured steps will be saved.
+void f08stopCalibrationModeSteppers()
+{
+    if (calibrationStepperStepCounter == 0 || calibrationStepperNumber == 0)
     {
-        debugln("Calibration mode on");
-        calibrationMeasureAmountMl = amountMl;
-        calibrationStepperNumber = stepperNumber;
-        steppers[stepperNumber - 1]->setSpeed(2500);
-        calibrationStepperStepCounter = 1;
-        stepper1.enableOutputs();
+        debugln("Calibration mode not active");
+        return;
     }
-    else
-    {
-        debugln("------- CALIBRATION RESULT ------");
-        debug("Steps: ");
-        debugln(calibrationStepperStepCounter);
-        debug("Liquid Amount: ");
-        debugln(calibrationMeasureAmountMl);
-        debug("Steps/ml: ");
-        debugln(calibrationStepperStepCounter / calibrationMeasureAmountMl);
-        eepromManager.setStepsPerMl(calibrationStepperStepCounter / calibrationMeasureAmountMl);
-        steppers[stepperNumber - 1]->disableOutputs();
-        steppers[stepperNumber - 1]->setCurrentPosition(0);
-        calibrationStepperStepCounter = 0;
-        calibrationMeasureAmountMl = 0;
-    }
+    
+    debugln("------- CALIBRATION RESULT ------");
+    debug("Steps: ");
+    debugln(calibrationStepperStepCounter);
+    debug("Liquid Amount: ");
+    debugln(calibrationMeasureAmountMl);
+    debug("Steps/ml: ");
+    debugln(calibrationStepperStepCounter / calibrationMeasureAmountMl);
+    eepromManager.setStepsPerMl(calibrationStepperStepCounter / calibrationMeasureAmountMl);
+    steppers[calibrationStepperNumber - 1]->disableOutputs();
+    steppers[calibrationStepperNumber - 1]->setCurrentPosition(0);
+    calibrationStepperStepCounter = 0;
+    calibrationMeasureAmountMl = 0;
 }
 
 Timer<>::Task stirringTask = nullptr;
 
 void f03Ping()
 {
-    Serial.println(R"({"device":"PumpsX4", "version":"1.0"})");
+    Serial.println(R"({"device":")" DEVICE_NAME R"(", "version":")" VERSION R"("})");
     digitalWrite(STIRRING_OUTPUT_PIN, HIGH);
 
     if (stirringTask != nullptr)
@@ -257,6 +269,11 @@ void f03Ping()
         stirringTask = nullptr;
         return true;
     });
+}
+
+void f09isAlive()
+{
+    Serial.println(R"({"device":")" DEVICE_NAME R"(", "version":")" VERSION R"("})");
 }
 
 void f04ResetAll()
@@ -300,44 +317,54 @@ void f05doseAmountMotors(const int motorNumber, const float doseAmount)
     }
 }
 
-void f06setCalibrationModeMotors(int motorNumber, bool status, const int amountMl = 0)
+void f06setCalibrationModeMotors(int motorNumber, const int amountMl = 0)
 {
     if (motorNumber < 1 || motorNumber > 2 || amountMl == 0)
     {
-        "Invalid motor number or amountMl: motorNumber=" + String(motorNumber) + ", amountMl=" + String(amountMl);
+        debugln("Invalid motor number or amountMl: motorNumber=" + String(motorNumber) + ", amountMl=" + String(amountMl));
         return;
     };
-    if (status)
+    
+    debugln("Motor calibration mode on");
+    debugln("Selected motor: " + String(motorNumber) + ", amount: " + String(amountMl) + "ml");
+    debugln("To finish send '7'");
+
+    calibrationMotorStepCounter = 0;
+    calibrationModeMotor = true;
+    calibrationMotorNumber = motorNumber;
+    calibrationMotorAmountMl = amountMl;
+    
+    if (motorNumber == 1)
     {
-        debugln("Calibration mode on");
-        calibrationMotorStepCounter = 0;
-        calibrationModeMotor = true;
-        if (motorNumber == 1)
-        {
-            digitalWrite(MOTOR1_PIN, HIGH);
-        }
-        else
-        {
-            digitalWrite(MOTOR2_PIN, HIGH);
-        }
+        digitalWrite(MOTOR1_PIN, HIGH);
     }
     else
     {
-        debugln("------- CALIBRATION RESULT MOTORS ------");
-        debug("Ticks: ");
-        debugln(calibrationMotorStepCounter);
-        debug("Liquid Amount: ");
-        debugln(amountMl);
-        digitalWrite(MOTOR1_PIN, LOW);
-        digitalWrite(MOTOR2_PIN, LOW);
-        motor1State = LOW;
-        motor2State = LOW;
-        eepromManager.setTimePerMl(static_cast<int>(calibrationMotorStepCounter / amountMl));
-        calibrationMotorStepCounter = 0;
-        calibrationModeMotor = false;
+        digitalWrite(MOTOR2_PIN, HIGH);
     }
 }
 
+void f07stopCalibrationModeMotors()
+{
+    if (!calibrationModeMotor)
+    {
+        debugln("Calibration mode not active");
+        return;
+    }
+    
+    debugln("------- CALIBRATION RESULT MOTORS ------");
+    debug("Ticks: ");
+    debugln(calibrationMotorStepCounter);
+    debug("Liquid Amount: ");
+    debugln(calibrationMotorAmountMl);
+    digitalWrite(MOTOR1_PIN, LOW);
+    digitalWrite(MOTOR2_PIN, LOW);
+    motor1State = LOW;
+    motor2State = LOW;
+    eepromManager.setTimePerMl(static_cast<int>(calibrationMotorStepCounter / calibrationMotorAmountMl));
+    calibrationMotorStepCounter = 0;
+    calibrationModeMotor = false;
+}
 
 void parseSerialCommand(const String& command)
 {
@@ -364,22 +391,18 @@ void parseSerialCommand(const String& command)
 
         f01doseAmountSteppers(stepperNumber, amount);
     }
-    else if (functionNumber == 2) // setCalibrationMode function
+    else if (functionNumber == 2) // start calibration mode steppers
     {
         int stepperNumber = -1;
-        bool status = false;
         int amountMl = 300; // default value
-
+    
         token = strtok(nullptr, " ");
         if (token != nullptr) stepperNumber = atoi(token);
-
-        token = strtok(nullptr, " ");
-        if (token != nullptr) status = atoi(token);
-
+    
         token = strtok(nullptr, " ");
         if (token != nullptr) amountMl = atoi(token);
-
-        f02setCalibrationModeSteppers(stepperNumber, status, amountMl);
+    
+        f02setCalibrationModeSteppers(stepperNumber, amountMl);
     }
     else if (functionNumber == 3)
     {
@@ -402,22 +425,30 @@ void parseSerialCommand(const String& command)
 
         f05doseAmountMotors(motorNumber, amount);
     }
-    else if (functionNumber == 6) // setCalibrationMode function
+    else if (functionNumber == 6) // start calibration mode motors
     {
         int motorNumber = -1;
-        bool status = false;
         int amountMl = 300; // default value
-
+    
         token = strtok(nullptr, " ");
         if (token != nullptr) motorNumber = atoi(token);
-
-        token = strtok(nullptr, " ");
-        if (token != nullptr) status = atoi(token);
-
+    
         token = strtok(nullptr, " ");
         if (token != nullptr) amountMl = atoi(token);
-
-        f06setCalibrationModeMotors(motorNumber, status, amountMl);
+    
+        f06setCalibrationModeMotors(motorNumber, amountMl);
+    }
+    else if (functionNumber == 7) // stop calibration mode motors
+    {
+        f07stopCalibrationModeMotors();
+    }
+    else if (functionNumber == 8) // stop calibration mode steppers
+    {
+        f08stopCalibrationModeSteppers();
+    }
+    else if (functionNumber == 9) // is alive check
+    {
+        f09isAlive();
     }
     else
     {
