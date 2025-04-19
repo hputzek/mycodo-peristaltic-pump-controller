@@ -443,7 +443,8 @@ class PeristalticPumpController:
         if int(pump_number) < 5:
             command = f"1 {pump_number} {amount}"
         else:
-            command = f"5 {pump_number} {amount}"
+            hardware_pump_number = int(pump_number) - 4
+            command = f"5 {hardware_pump_number} {amount}"
         response = self.send_command(command)
 
         return response
