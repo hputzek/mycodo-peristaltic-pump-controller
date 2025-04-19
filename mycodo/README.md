@@ -24,7 +24,7 @@ Preparation: Get a measurement cup
   * When the `Dispense Amount` you selected is reached / pumped into your measuremment cup click `Stop calibration`
 * ✅Your pumps are ready to rumble.
 
-* ⚠️You only need to do this calibration for one pump, all others take over the calibration result.
+* ⚠️You only need to do this calibration once per pump type (e.g. Steppers/Motors). All other steppers/motors take over the calibration result.
 
 ## Usage
 * `Emergency stop` immediately stops and resets _all_ pumps.
