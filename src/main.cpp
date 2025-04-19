@@ -83,7 +83,7 @@ void setMotorState(int motorPin, bool& motorState, unsigned long& remainingTicks
     {
         if (motorState != HIGH)
         {
-            debugln("Motor " + String(motorPin) + " on");
+            debugln("Motor Pin " + String(motorPin) + " on");
             digitalWrite(motorPin, HIGH);
             motorState = HIGH;
         }
@@ -96,7 +96,7 @@ void setMotorState(int motorPin, bool& motorState, unsigned long& remainingTicks
     {
         if (motorState != LOW)
         {
-            debugln("Motor " + String(motorPin) + " off");
+            debugln("Motor Pin " + String(motorPin) + " off");
             digitalWrite(motorPin, LOW);
             motorState = LOW;
         }
