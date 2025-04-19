@@ -6,7 +6,6 @@ import json
 import logging
 import time
 import copy
-from xmlrpc.client import Boolean
 
 import serial
 from serial.serialutil import SerialTimeoutException
@@ -124,9 +123,9 @@ OUTPUT_INFORMATION = {
             'phrase': 'How much to dispense (ml)'
         },
         {
-            'id': 'input_button_dispense_amount',
+            'id': 'input_button_dispense',
             'type': 'button',
-            'name': 'Dispense'
+            'name': '💧Dispense'
         },
         {
             'id': 'input_button_start_calibration',
@@ -200,13 +199,14 @@ class OutputModule(AbstractOutput):
 
             # Check initial alive status
             if hasattr(self.device, 'check_alive_status'):
-                alive_status = self.device.ping()
-                for i in range(5):
+                alive_status = self.device.check_alive_status()
+                for i in range(6):
                     self.output_states[i] = False
-                self.output_states[6] = Boolean(alive_status)
+                self.output_states[6] = alive_status
                 self.logger.info(f"Device online: {alive_status}")
+                self.output_setup = True
 
-            self.output_setup = True
+
 
     def record_dispersal(self, pump_number=None, amount_ml=None):
         measure_dict = copy.deepcopy(measurements_dict)
@@ -248,7 +248,7 @@ class OutputModule(AbstractOutput):
 
             # Check alive status
             alive_status = self.device.check_alive_status()
-            self.output_states[4] = alive_status  # Update the alive status in output_states
+            self.output_states[6] = alive_status  # Update the alive status in output_states
 
             self.record_dispersal(output_channel + 1, amount)
             self.output_states[output_channel] = True
@@ -292,19 +292,19 @@ class OutputModule(AbstractOutput):
         self.logger.info(self.device.reset_all())
         self.logger.error("Stopped all pumps.")
 
-    def input_button_dispense_amount(self, args_dict):
+    def input_button_dispense(self, args_dict):
         if not self.is_setup():
             self.logger.info("The output is not set up.")
+            return True
         if not self.checkParams(args_dict):
-            self.logger.error(
-                "Error: Invalid input parameters"
-            )
-            return
-            # Check alive status
+            self.logger.error("Error: Invalid input parameters")
+            return False
+        # Check alive status
         alive_status = self.device.check_alive_status()
-        self.output_states[4] = alive_status  # Update the alive status in output_states
+        self.output_states[6] = alive_status  # Update the alive status in output_states
         self.logger.info(self.device.dispense(args_dict['pump_number'], args_dict['dispense_ml']))
         self.record_dispersal(args_dict['pump_number'], args_dict['dispense_ml'])
+        return True
 
     def input_button_start_calibration(self, args_dict):
         if not self.checkParams(args_dict):
@@ -327,6 +327,7 @@ class OutputModule(AbstractOutput):
             self.logger.error(
                 "Error: Invalid input parameters"
             )
+            return
         ping_result = self.device.ping()
         if not ping_result:
             self.logger.error("Error: Device ping returned empty string")
@@ -439,13 +440,14 @@ class PeristalticPumpController:
         """
 
         # Send the dispense command with command number based on stepper_number
-        if pump_number < 5:
+        if int(pump_number) < 5:
             command = f"1 {pump_number} {amount}"
         else:
             command = f"5 {pump_number} {amount}"
         response = self.send_command(command)
 
         return response
+
 
     def set_calibration_mode(self, pump_number, amount_ml=None):
         """
@@ -500,7 +502,9 @@ class PeristalticPumpController:
 
         :return: True if the device is online, False otherwise
         """
+
         command = "9"
+        self.serial.reset_input_buffer()
         response = self.send_command(command)
 
         try:
@@ -510,6 +514,8 @@ class PeristalticPumpController:
             if (parsed_response.get('device') == 'PumpsX4' and
                     parsed_response.get('version') == '1.0'):
                 return True
+            else:
+                self.logger.error("Unexpected response from device: {}".format(response))
             return False
         except (json.JSONDecodeError, TypeError, AttributeError):
             self.logger.error("Error parsing JSON response: {}".format(response))
