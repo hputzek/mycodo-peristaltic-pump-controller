@@ -282,6 +282,11 @@ void f04ResetAll()
     {
         stepper->setCurrentPosition(0);
     }
+    digitalWrite(MOTOR1_PIN, LOW);
+    digitalWrite(MOTOR2_PIN, LOW);
+    motor1State = LOW;
+    motor2State = LOW;
+
     Serial.println("Stopped all pumps.");
 }
 
@@ -475,7 +480,6 @@ void pollSerial()
         }
     }
 
-    // When the string is complete, call parseSerialCommand
     if (stringComplete)
     {
         parseSerialCommand(inputString);
